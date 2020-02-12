@@ -49,18 +49,21 @@ type WebsocketProxy struct {
 
 // ProxyHandler returns a new http.Handler interface that reverse proxies the
 // request to the given target.
-func ProxyHandler(target *url.URL) http.Handler { return NewProxy(target) }
+func ProxyHandler(target *url.URL) http.Handler { return NewProxy(target, nil) }
 
 // NewProxy returns a new Websocket reverse proxy that rewrites the
 // URL's to the scheme, host and base path provider in target.
-func NewProxy(target *url.URL) *WebsocketProxy {
-	backend := func(r *http.Request) *url.URL {
-		// Shallow copy
-		u := *target
-		u.Fragment = r.URL.Fragment
-		u.Path = r.URL.Path
-		u.RawQuery = r.URL.RawQuery
-		return &u
+func NewProxy(target *url.URL, backend func(*http.Request) *url.URL) *WebsocketProxy {
+	// Default backend
+	if backend == nil {
+		backend = func(r *http.Request) *url.URL {
+			// Shallow copy
+			u := *target
+			u.Fragment = r.URL.Fragment
+			u.Path = r.URL.Path
+			u.RawQuery = r.URL.RawQuery
+			return &u
+		}
 	}
 	return &WebsocketProxy{Backend: backend}
 }
@@ -213,6 +216,10 @@ func (w *WebsocketProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if e, ok := err.(*websocket.CloseError); !ok || e.Code == websocket.CloseAbnormalClosure {
 		log.Printf(message, err)
 	}
+}
+
+func (w *WebsocketProxy) AddBackend(newBackend func(*http.Request) *url.URL) {
+	w.Backend = newBackend
 }
 
 func copyHeader(dst, src http.Header) {
